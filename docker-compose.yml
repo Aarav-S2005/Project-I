@@ -1,0 +1,50 @@
+services:
+  spicedb:
+    image: authzed/spicedb:v1.36.0
+    container_name: spicedb
+    command: serve --grpc-preshared-key "secret-preshared-key" --datastore-engine "memory" --http-enabled --telemetry-endpoint=""
+    ports:
+      - "50051:50051" # gRPC
+      - "8443:8443"   # HTTP / Metrics / Dashboard
+    environment:
+      - SPICEDB_GRPC_PRESHARED_KEY=secret-preshared-key
+      - SPICEDB_DATASTORE_ENGINE=memory
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  docs-service:
+    build: ./demo/services/docs-service
+    container_name: docs-service
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  team-service:
+    build: ./demo/services/team-service
+    container_name: team-service
+    ports:
+      - "3002:3002"
+    restart: unless-stopped
+
+  payroll-service:
+    build: ./demo/services/payroll-service
+    container_name: payroll-service
+    ports:
+      - "3003:3003"
+    restart: unless-stopped
+
+  demo-frontend:
+    build: ./demo/frontend
+    container_name: demo-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - docs-service
+      - team-service
+      - payroll-service
+    restart: unless-stopped

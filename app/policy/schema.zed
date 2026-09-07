@@ -1,0 +1,34 @@
+/**
+ * Core subject definition for end users.
+ */
+definition user {}
+
+/**
+ * Team definition supporting direct user members as well as nested sub-teams.
+ */
+definition team {
+    relation member: user | team#member
+    relation admin: user
+
+    permission view = member + admin
+}
+
+/**
+ * Document resource with role-based relations and closed-loop narrowing support.
+ */
+definition document {
+    relation reader: user | team#member
+    relation writer: user | team#member
+    relation owner: user | team#admin
+
+    /**
+     * Used by the Decision Engine's closed-loop `narrow` action to temporarily
+     * restrict/quarantine access for an anomalous session without mutating the
+     * persistent membership or ownership relations.
+     */
+    relation restricted: user
+
+    permission view = (reader + writer + owner) - restricted
+    permission edit = (writer + owner) - restricted
+    permission delete = owner - restricted
+}
