@@ -95,95 +95,129 @@ Every incoming API request passes through the following sequential stages:
 
 ## 4. How to Run the Demo
 
-### Prerequisites
-- Python 3.12+
-- `uv` package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh` or `winget install astral-sh.uv`)
-- Node.js 20+ and `pnpm` (`npm install -g pnpm`)
-- Docker & Docker Compose
+### 📋 Preparation & Overview of Ports
+During the demo, you will have the following services running:
+
+| Port | Service | Role |
+| :--- | :--- | :--- |
+| **`:50051`** | **SpiceDB** (Docker) | ReBAC graph engine (Zanzibar-style relationships) |
+| **`:6379`** | **Redis** (Docker) | Sliding-window feature store & session trust cache |
+| **`:3001`** | **Docs Service** (Node) | Low-sensitivity backend microservice (`doc1`) |
+| **`:3002`** | **Team Service** (Node) | Medium-sensitivity backend microservice (`team:eng`) |
+| **`:3003`** | **Payroll Service** (Node) | High-sensitivity backend microservice (`financials`) |
+| **`:8000`** | **Zero-Trust API Gateway** (Python) | Core interceptor, trust scoring & decision engine |
+| **`:4000`** | **Demo Frontend** (React + Vite) | Web dashboard for live testing & visualization |
 
 ---
 
-### Step-by-Step Setup
+### 🚀 Step-by-Step Startup Sequence
 
-#### Step 1: Clone Repository and Install Python Dependencies
+#### Step 1: Start Docker Infrastructure (SpiceDB & Redis)
+In your first terminal in the project root:
 ```bash
-git clone <repository-url>
-cd <repository-directory>
-uv sync
+docker compose up -d spicedb redis
 ```
 
-#### Step 2: Start Infrastructure & Mock Microservices in Docker
-Launch SpiceDB, Redis, and the three backend demo services (`docs-service`, `team-service`, `payroll-service`):
-```bash
-docker compose up -d
-```
-
-#### Step 3: Initialize SpiceDB Schema & Default Graph Relationships
-Apply the Zed schema and write baseline tuples (Alice in Eng, Bob in Eng, Charlie in Security Admin):
+#### Step 2: Initialize SpiceDB Schema & Seed Relationships
+In the same terminal, apply the Zanzibar schema (`schema.zed`) and seed test users (Alice in Eng, Bob in Eng, Charlie in Security Admin):
 ```bash
 uv run python scripts/setup_spicedb.py
 ```
+*(You will see output confirming relationships written to SpiceDB).*
 
-#### Step 4: Train the Baseline Anomaly Detection Model
-Generate the synthetic baseline training dataset and serialize the Isolation Forest model along with pre-computed background datasets:
+#### Step 3: Train / Verify the Anomaly Baseline Model
+Train the Isolation Forest model and build pre-computed SHAP background datasets:
 ```bash
 uv run python scripts/train_baseline_model.py
 ```
 
+#### Step 4: Start the 3 Mock Backend Microservices
+Open 3 terminal tabs/windows (or run them in the background):
+
+- **Terminal A (Docs Service)**:
+  ```bash
+  cd demo/services/docs-service
+  node server.js
+  ```
+- **Terminal B (Team Service)**:
+  ```bash
+  cd demo/services/team-service
+  node server.js
+  ```
+- **Terminal C (Payroll Service)**:
+  ```bash
+  cd demo/services/payroll-service
+  node server.js
+  ```
+
 #### Step 5: Start the Zero-Trust API Gateway
-Run the gateway service on port 8000:
+In a new terminal in the project root:
 ```bash
 uv run uvicorn app.gateway.main:app --port 8000 --reload
 ```
+*(The Gateway will start on `http://localhost:8000`).*
 
-#### Step 6: Start the Demo Frontend
-In a separate terminal, launch the interactive React dashboard:
+#### Step 6: Start the React Demo Frontend
+In another terminal:
 ```bash
 cd demo/frontend
-pnpm install
 pnpm dev
 ```
-Open **`http://localhost:5173`** in your browser.
+*(The frontend will start on `http://localhost:4000`).*
 
 ---
 
-### Automated Traffic Simulation (300+ Requests CLI Benchmark)
+### 🖥️ Step 7: Live Walkthrough in the Web Browser
 
-To simulate a complete high-volume stream of clean and anomalous traffic with real-time SHAP analysis:
+Open your browser and navigate to: **`http://localhost:4000`**
+
+#### Click Path to Demonstrate to the Panel:
+
+- **Scenario 1: Normal Authorized Access (ALLOW Band • Score 1.00)**
+  - Select **Alice Cooper** in the persona list.
+  - Under **Microservices Behind Gateway**, find **Documentation Service** and click **Invoke via Gateway**.
+  - **What to show the panel**:
+    - Response: `HTTP 200 OK`.
+    - Trust Meter: Remains green at `1.00` (`ALLOW`).
+    - Audit Feed on the right: Logs the access with feature attributions showing normal request rates.
+
+- **Scenario 2: Graph-Based Authorization Violation (DENY)**
+  - With **Alice Cooper** still selected, click **Invoke via Gateway** on **Payroll & Compensation** (`document:financials`).
+  - **What to show the panel**:
+    - Response: `HTTP 403 Forbidden` (`denied`).
+    - Rationale: ReBAC policy check failed because Alice lacks the `team:security#admin` relation in SpiceDB.
+
+- **Scenario 3: Rapid Request Burst (Degradation to STEP_UP)**
+  - With **Alice Cooper** selected, look at the **Anomaly Injection Lab** on the left.
+  - Click **Trigger Rapid Request Burst (20 reqs)**.
+  - **What to show the panel**:
+    - The 1-minute request rate surges past the baseline envelope.
+    - The continuous trust score decays from `1.00` down into the amber **`STEP_UP`** band ($0.60 - 0.79$).
+    - Subsequent requests return `HTTP 401 Unauthorized` with challenge: `MFA_REQUIRED`.
+
+- **Scenario 4: Impossible Travel Anomaly & Closed-Loop Policy Narrowing (NARROW)**
+  - Switch persona to **Bob Martin**.
+  - Click **Simulate Impossible Travel (SF → Tokyo)**.
+  - **What to show the panel**:
+    - Instant coordinate teleportation computes a velocity of $> 8,000\text{ km/h}$.
+    - Trust collapses into the red **`NARROW`** band ($0.35 - 0.59$).
+    - **Closed-Loop Feedback**: The gateway automatically writes a temporary restriction tuple into SpiceDB.
+    - In the SHAP feed on the right, show `geo_velocity_kmh (▲ threat)` highlighted as the primary mathematical driver of the anomaly.
+
+- **Scenario 5: Reset Baseline**
+  - Click **Reset State** in the top navigation bar to issue a fresh session token and restore baseline trust ($1.00$).
+
+---
+
+### 📊 Step 8: (Optional) Run the High-Volume Automated CLI Benchmark
+If the panel asks to see an automated benchmark over hundreds of requests:
 ```bash
 uv run python scripts/simulate_traffic.py --count 300
 ```
 
 ---
 
-### Interactive Walkthrough Scenarios (In the Web Dashboard)
-
-1. **Authorized Normal Request (`ALLOW`)**:
-   - Select **Alice Cooper** in the persona switcher.
-   - Click **Invoke via Gateway** on the **Documentation Service** (`/api/v1/document/doc1`).
-   - Observe `HTTP 200 OK`, `Action: ALLOW`, `Trust Score: 1.00`.
-
-2. **ReBAC Graph Authorization Violation (`DENY`)**:
-   - Select **Alice Cooper**.
-   - Click **Invoke via Gateway** on **Payroll & Compensation** (`/api/v1/document/financials`).
-   - Observe `HTTP 403 Forbidden` because Alice lacks membership in `team:security#admin`.
-
-3. **Volumetric Rate Spike Anomaly (`STEP_UP`)**:
-   - Select **Alice Cooper**.
-   - Click **Trigger Rapid Request Burst (20 reqs)** in the Anomaly Injection Lab.
-   - Observe the trust score degrade into the `STEP_UP` band ($0.60 - 0.79$) and subsequent requests prompt for MFA (`HTTP 401`).
-
-4. **Impossible Travel Anomaly & Closed-Loop Policy Feedback (`NARROW`)**:
-   - Select **Bob Martin**.
-   - Click **Simulate Impossible Travel (SF → Tokyo)**.
-   - The gateway calculates a velocity of $> 8,000\text{ km/h}$, degrading trust into the `NARROW` band ($0.35 - 0.59$).
-   - The gateway automatically writes a restriction tuple into SpiceDB and displays `geo_velocity_kmh` as the primary SHAP threat driver.
-
----
-
-## 5. System Limitations & Technical Trade-offs
-
-While this architecture provides continuous trust-based authorization, several technical trade-offs and operational constraints apply:
+## 6. System Limitations & Technical Trade-offs
 
 1. **In-Line SHAP Computation Latency Overhead**
    - Computing exact SHAP values using `TreeExplainer` on every request introduces mathematical overhead (typically $10\text{ ms} - 50\text{ ms}$ per evaluation).

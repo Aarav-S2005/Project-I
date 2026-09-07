@@ -15,6 +15,10 @@ import {
   Layers,
   Server,
   Info,
+  CheckCircle2,
+  Lock,
+  ArrowUpRight,
+  TrendingUp,
 } from 'lucide-react'
 
 // Personas aligned with SpiceDB relation tuples
@@ -38,7 +42,7 @@ const PERSONAS: Persona[] = [
     deviceId: 'dev_alice_mbp_corp',
     location: { name: 'San Francisco, US', lat: 37.7749, lon: -122.4194 },
     description: 'Member of team:eng. Has view/edit rights to doc1 and team:eng.',
-    expectedAccess: ['doc1', 'team:eng'],
+    expectedAccess: ['doc1', 'eng'],
   },
   {
     id: 'bob',
@@ -48,7 +52,7 @@ const PERSONAS: Persona[] = [
     deviceId: 'dev_bob_thinkpad_corp',
     location: { name: 'San Francisco, US', lat: 37.7749, lon: -122.4194 },
     description: 'Member of team:eng. Has view rights to doc1 and team:eng.',
-    expectedAccess: ['doc1', 'team:eng'],
+    expectedAccess: ['doc1', 'eng'],
   },
   {
     id: 'charlie',
@@ -57,7 +61,7 @@ const PERSONAS: Persona[] = [
     role: 'Security Admin',
     deviceId: 'dev_charlie_linux_corp',
     location: { name: 'San Francisco, US', lat: 37.7749, lon: -122.4194 },
-    description: 'Member of team:security (admin). Can access high-sensitivity payroll.',
+    description: 'Member of team:security (admin). Can access high-sensitivity payroll and financials.',
     expectedAccess: ['doc1', 'financials'],
   },
   {
@@ -96,7 +100,7 @@ const SERVICES: ServiceTarget[] = [
     defaultPermission: 'view',
     backendPort: 3001,
     icon: FileText,
-    description: 'General engineering specs. Available to standard engineering members.',
+    description: 'General engineering specs. Perfect fit for Alice, Bob & Charlie.',
   },
   {
     id: 'team',
@@ -108,7 +112,7 @@ const SERVICES: ServiceTarget[] = [
     defaultPermission: 'view',
     backendPort: 3002,
     icon: Users,
-    description: 'Internal roster and team assignments. Available to team members.',
+    description: 'Internal roster and team assignments. Perfect fit for Engineering members (Alice, Bob).',
   },
   {
     id: 'payroll',
@@ -120,7 +124,7 @@ const SERVICES: ServiceTarget[] = [
     defaultPermission: 'view',
     backendPort: 3003,
     icon: DollarSign,
-    description: 'Confidential executive compensation data. Strict Security Admin access only.',
+    description: 'Confidential executive compensation data. Strict Security Admin access (Charlie).',
   },
 ]
 
@@ -199,6 +203,7 @@ export function App() {
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([])
   const [isAuditLoading, setIsAuditLoading] = useState<boolean>(false)
   const [isBurstRunning, setIsBurstRunning] = useState<boolean>(false)
+  const [isRecoveryRunning, setIsRecoveryRunning] = useState<boolean>(false)
 
   // 1. Fetch JWT Token for current persona & session
   const fetchToken = useCallback(async (persona: Persona, sessId: string) => {
@@ -266,7 +271,10 @@ export function App() {
     resourceType: string,
     resourceId: string,
     permission: string = 'view',
-    serviceId: string = 'custom'
+    serviceId: string = 'custom',
+    overrideDevice?: string,
+    overrideLat?: number,
+    overrideLon?: number
   ) => {
     if (!token) {
       await fetchToken(selectedPersona, sessionId)
@@ -277,9 +285,9 @@ export function App() {
       const url = `/api/v1/${resourceType}/${resourceId}?permission=${permission}`
       const headers: Record<string, string> = {
         Authorization: `Bearer ${token}`,
-        'X-Device-Id': currentDeviceId,
-        'X-Client-Latitude': currentLat.toString(),
-        'X-Client-Longitude': currentLon.toString(),
+        'X-Device-Id': overrideDevice || currentDeviceId,
+        'X-Client-Latitude': (overrideLat ?? currentLat).toString(),
+        'X-Client-Longitude': (overrideLon ?? currentLon).toString(),
         'User-Agent': 'ZeroTrustDemoFrontend/1.0',
       }
 
@@ -326,7 +334,61 @@ export function App() {
     }
   }
 
-  // 4. Anomaly Simulator: Rapid Request Burst
+  // 4. Perfect Fit Workflow: Normal Legitimate Activity that Increases / Builds Trust
+  const triggerTrustBuildingWorkflow = async () => {
+    setIsRecoveryRunning(true)
+    // Ensure legitimate telemetry
+    setCurrentDeviceId(selectedPersona.deviceId)
+    setCurrentLat(selectedPersona.location.lat)
+    setCurrentLon(selectedPersona.location.lon)
+    setCurrentLocationName(selectedPersona.location.name)
+
+    // Select the primary resource that is a perfect fit for this persona
+    const primaryFitResource = selectedPersona.expectedAccess[0] === 'financials'
+      ? { type: 'document', id: 'financials' }
+      : selectedPersona.expectedAccess[0] === 'eng'
+      ? { type: 'team', id: 'eng' }
+      : { type: 'document', id: 'doc1' }
+
+    setLastReason(`🌱 Executing authorized benign workflow on ${primaryFitResource.type}:${primaryFitResource.id}. Building trust score...`)
+
+    // Send 3 paced legitimate requests to trigger trust recovery steps
+    for (let i = 0; i < 3; i++) {
+      await executeGatewayRequest(
+        primaryFitResource.type,
+        primaryFitResource.id,
+        'view',
+        'recovery',
+        selectedPersona.deviceId,
+        selectedPersona.location.lat,
+        selectedPersona.location.lon
+      )
+      await new Promise((r) => setTimeout(r, 400))
+    }
+    setIsRecoveryRunning(false)
+  }
+
+  // 5. MFA Challenge Verification (Step-Up re-authentication)
+  const handleVerifyMFAChallenge = async () => {
+    try {
+      await fetch('http://localhost:8000/auth/mfa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: selectedPersona.subject,
+          session_id: sessionId,
+        }),
+      })
+    } catch (e) {
+      console.error('MFA verify request failed:', e)
+    }
+    setCurrentTrustScore(1.0)
+    setLastAction('allow')
+    setLastReason('✅ Multi-Factor Authentication verified. Quarantine restrictions lifted and session trust restored to 1.00.')
+    fetchToken(selectedPersona, sessionId)
+  }
+
+  // 6. Anomaly Simulator: Rapid Request Burst
   const triggerRapidBurst = async () => {
     setIsBurstRunning(true)
     setLastReason('⚡ Rapid burst simulation triggered: Firing 20 requests in 400ms...')
@@ -337,7 +399,7 @@ export function App() {
     setIsBurstRunning(false)
   }
 
-  // 5. Anomaly Simulator: Impossible Travel (Teleport to Tokyo)
+  // 7. Anomaly Simulator: Impossible Travel (Teleport to Tokyo)
   const triggerImpossibleTravel = async () => {
     const tokyoLat = 35.6762
     const tokyoLon = 139.6503
@@ -346,23 +408,22 @@ export function App() {
     setCurrentLocationName('Tokyo, JP (Teleported)')
     setLastReason('✈️ Impossible travel simulated: Instant geo-jump from SF to Tokyo (~8,200 km).')
 
-    // Fire immediately to trigger geo-velocity threshold
     setTimeout(() => {
-      executeGatewayRequest('document', 'doc1', 'view', 'travel')
+      executeGatewayRequest('document', 'doc1', 'view', 'travel', currentDeviceId, tokyoLat, tokyoLon)
     }, 100)
   }
 
-  // 6. Anomaly Simulator: Untrusted / Rogue Device Spoofing
+  // 8. Anomaly Simulator: Untrusted / Rogue Device Spoofing
   const triggerDeviceSpoofing = async () => {
     const spoofedId = 'unknown_rogue_device_attacker'
     setCurrentDeviceId(spoofedId)
     setLastReason('🕵️ Device mismatch triggered: Injected unrecognized hardware fingerprint.')
     setTimeout(() => {
-      executeGatewayRequest('document', 'doc1', 'view', 'device')
+      executeGatewayRequest('document', 'doc1', 'view', 'device', spoofedId)
     }, 100)
   }
 
-  // 7. Reset baseline
+  // 9. Reset baseline
   const handleResetBaseline = () => {
     const freshSess = `sess_${selectedPersona.id}_${Date.now().toString().slice(-4)}`
     setSessionId(freshSess)
@@ -442,7 +503,7 @@ export function App() {
 
       {/* 3-Column Layout */}
       <div className="grid-3">
-        {/* Left Column: Persona & Telemetry & Anomaly Lab */}
+        {/* Left Column: Persona, Telemetry & Anomaly Lab */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Persona Card */}
           <div className="card">
@@ -608,6 +669,45 @@ export function App() {
               <div style={{ fontWeight: 600, color: '#cbd5e1', marginBottom: '2px' }}>Decision Rationale:</div>
               <p style={{ color: '#94a3b8', margin: 0 }}>{lastReason}</p>
             </div>
+
+            {/* Quick Recovery / Step-Up MFA Button if degraded */}
+            {lastAction === 'step_up' && (
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #334155' }}>
+                <button
+                  className="btn btn-warning"
+                  onClick={handleVerifyMFAChallenge}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  <Lock size={15} />
+                  Complete MFA Verification (Restore Trust to 1.00)
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Trust Builder & Benign Activity Card */}
+          <div className="card" style={{ border: '1px solid rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div className="card-title" style={{ color: '#34d399', marginBottom: 0 }}>
+                <TrendingUp size={18} color="#10b981" />
+                <span>Legitimate Authorized Activity (Trust Builder)</span>
+              </div>
+              <span className="tag tag-allow">Trust Recovery</span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px' }}>
+              Execute legitimate, authorized actions aligned with <strong>{selectedPersona.name}</strong>'s role and matching device to build and increase trust score:
+            </p>
+            <button
+              className="btn btn-success"
+              onClick={triggerTrustBuildingWorkflow}
+              disabled={isRecoveryRunning || selectedPersona.id === 'mallory'}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              <CheckCircle2 size={16} />
+              {isRecoveryRunning
+                ? 'Executing Authorized Requests & Recovering Score...'
+                : `Run Authorized Workflow as ${selectedPersona.name} (Increases Trust)`}
+            </button>
           </div>
 
           {/* Microservices Routing Gate */}
@@ -624,16 +724,32 @@ export function App() {
               {SERVICES.map((svc) => {
                 const SvcIcon = svc.icon
                 const isExecuting = activeRequestLoading === svc.id
+                const isPerfectFit = selectedPersona.expectedAccess.includes(svc.resourceId)
+
                 return (
-                  <div key={svc.id} className="service-card">
+                  <div
+                    key={svc.id}
+                    className="service-card"
+                    style={{
+                      border: isPerfectFit ? '1px solid rgba(16, 185, 129, 0.4)' : undefined,
+                      background: isPerfectFit ? 'rgba(16, 185, 129, 0.03)' : undefined,
+                    }}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ padding: '6px', background: 'rgba(59, 130, 246, 0.15)', borderRadius: '6px' }}>
+                        <div style={{ padding: '6px', background: isPerfectFit ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.15)', borderRadius: '6px' }}>
                           <SvcIcon size={20} />
                         </div>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: '14px', color: '#f8fafc' }}>
-                            {svc.title}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ fontWeight: 600, fontSize: '14px', color: '#f8fafc' }}>
+                              {svc.title}
+                            </div>
+                            {isPerfectFit && (
+                              <span style={{ fontSize: '10px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>
+                                ⭐ PERFECT FIT
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: '11px', color: '#94a3b8' }}>
                             Target: <code style={{ color: '#38bdf8' }}>/api/v1/{svc.resourceType}/{svc.resourceId}</code>
@@ -676,11 +792,12 @@ export function App() {
                         Backend: <code style={{ color: '#cbd5e1' }}>localhost:{svc.backendPort}</code>
                       </span>
                       <button
-                        className="btn"
+                        className={`btn ${isPerfectFit ? 'btn-success' : ''}`}
                         onClick={() => executeGatewayRequest(svc.resourceType, svc.resourceId, svc.defaultPermission, svc.id)}
                         disabled={isExecuting}
                       >
-                        {isExecuting ? 'Evaluating...' : 'Invoke via Gateway'}
+                        <ArrowUpRight size={14} />
+                        {isExecuting ? 'Evaluating...' : isPerfectFit ? 'Invoke (Builds Trust)' : 'Invoke via Gateway'}
                       </button>
                     </div>
                   </div>
@@ -787,6 +904,11 @@ export function App() {
                         {rec.decision.trust_score.decay_amount > 0 && (
                           <span style={{ color: '#ef4444' }}>
                             Decay: -{formatScore(rec.decision.trust_score.decay_amount)}
+                          </span>
+                        )}
+                        {rec.decision.trust_score.recovery_amount > 0 && (
+                          <span style={{ color: '#10b981' }}>
+                            Recovery: +{formatScore(rec.decision.trust_score.recovery_amount)}
                           </span>
                         )}
                       </div>

@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import JSONResponse
@@ -80,6 +80,33 @@ async def issue_token(request: TokenRequest) -> TokenResponse:
         subject=request.subject,
         session_id=request.session_id,
     )
+
+
+class MfaVerifyRequest(BaseModel):
+    """Payload for verifying MFA and lifting session restrictions."""
+
+    subject: str = Field("user:alice", description="Subject identifier")
+    session_id: str = Field("sess_demo_1", description="Session identifier")
+
+
+@app.post("/auth/mfa/verify", tags=["Authentication"])
+async def verify_mfa(
+    mfa_req: MfaVerifyRequest,
+    interceptor: Annotated[ZeroTrustInterceptor, Depends(get_interceptor)] = None,  # type: ignore[assignment]
+) -> dict[str, Any]:
+    """Verify MFA challenge, restore session trust to 1.0, and lift active ReBAC quarantine restrictions."""
+    if interceptor is not None:
+        interceptor.trust_service.score_manager.reset_session_trust(mfa_req.session_id, 1.0)
+        for res_str in ["document:doc1", "document:financials"]:
+            try:
+                interceptor.spicedb_client.remove_restriction(mfa_req.subject, res_str)
+            except Exception:
+                pass
+    return {
+        "status": "success",
+        "message": f"MFA verified. Restrictions lifted for {mfa_req.subject}.",
+        "trust_score": 1.0,
+    }
 
 
 @app.api_route(

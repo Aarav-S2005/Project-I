@@ -154,8 +154,8 @@ class BehavioralFeatureExtractor:
             fingerprint=fingerprint_id,
         )
 
-        # 4. Time of Day Deviation
-        time_deviation = calculate_time_of_day_deviation(now)
+        # 4. Time of Day Deviation (6:00 - 23:00 active operational window)
+        time_deviation = calculate_time_of_day_deviation(now, start_hour=6, end_hour=23)
 
         return BehavioralFeatures(
             request_rate_1m=float(rate_1m),

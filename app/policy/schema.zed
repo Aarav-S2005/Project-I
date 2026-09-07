@@ -17,8 +17,8 @@ definition team {
  * Document resource with role-based relations and closed-loop narrowing support.
  */
 definition document {
-    relation reader: user | team#member
-    relation writer: user | team#member
+    relation reader: user | team#member | team#admin
+    relation writer: user | team#member | team#admin
     relation owner: user | team#admin
 
     /**

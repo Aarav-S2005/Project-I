@@ -11,10 +11,10 @@ from app.common.schemas import TrustScore
 logger = logging.getLogger(__name__)
 
 INITIAL_TRUST_SCORE = 1.0
-ANOMALY_THRESHOLD = 0.35
-DECAY_ALPHA = 0.85
+ANOMALY_THRESHOLD = 0.45
+DECAY_ALPHA = 1.0
 DECAY_GAMMA = 1.2
-RECOVERY_STEP = 0.02
+RECOVERY_STEP = 0.05
 RECOVERY_TIME_RATE = 0.0001  # recovery per second elapsed
 
 
