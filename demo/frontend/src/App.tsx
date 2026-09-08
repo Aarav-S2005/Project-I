@@ -371,7 +371,7 @@ export function App() {
   // 5. MFA Challenge Verification (Step-Up re-authentication)
   const handleVerifyMFAChallenge = async () => {
     try {
-      await fetch('http://localhost:8000/auth/mfa/verify', {
+      await fetch('/auth/mfa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

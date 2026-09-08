@@ -110,7 +110,30 @@ During the demo, you will have the following services running:
 
 ---
 
-### 🚀 Step-by-Step Startup Sequence
+### 🚀 Running the Full Stack
+
+#### Option A: One-Command Full Docker Orchestration (Recommended)
+You can start the entire stack — SpiceDB, Redis, Gateway (with auto-seeding), Docs Service, Team Service, Payroll Service, and Frontend UI — with a single command:
+
+```bash
+docker compose up --build
+```
+
+- **Frontend UI**: [http://localhost:4000](http://localhost:4000)
+- **API Gateway**: [http://localhost:8000](http://localhost:8000)
+- **SpiceDB Dashboard**: [http://localhost:8443](http://localhost:8443)
+- **Docs Service**: [http://localhost:3001](http://localhost:3001)
+- **Team Service**: [http://localhost:3002](http://localhost:3002)
+- **Payroll Service**: [http://localhost:3003](http://localhost:3003)
+
+To stop and remove all containers cleanly from scratch:
+```bash
+docker compose down -v
+```
+
+---
+
+#### Option B: Step-by-Step Manual Startup Sequence
 
 #### Step 1: Start Docker Infrastructure (SpiceDB & Redis)
 In your first terminal in the project root:

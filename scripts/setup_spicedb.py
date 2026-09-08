@@ -65,13 +65,23 @@ def seed_spicedb(client: SpiceDBClient) -> None:
 
 
 def main() -> None:
-    """Main execution point."""
+    """Main execution point with retry backoff for container environments."""
+    import time
     client = SpiceDBClient()
-    try:
-        seed_spicedb(client)
-    except Exception as exc:
-        print(f"Failed connecting or seeding SpiceDB: {exc}")
-        print("Ensure SpiceDB is running via 'docker compose up -d spicedb'")
+    max_retries = 15
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"Connecting to SpiceDB at {client.endpoint} (attempt {attempt}/{max_retries})...")
+            seed_spicedb(client)
+            print("SpiceDB initialization and seeding complete.")
+            return
+        except Exception as exc:
+            print(f"Attempt {attempt} failed: {exc}")
+            if attempt < max_retries:
+                time.sleep(2)
+            else:
+                print("Exhausted retries connecting to SpiceDB.")
+                sys.exit(1)
 
 
 if __name__ == "__main__":

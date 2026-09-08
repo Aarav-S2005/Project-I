@@ -1,4 +1,5 @@
 services:
+  # 1. SpiceDB ReBAC Engine
   spicedb:
     image: authzed/spicedb:v1.36.0
     container_name: spicedb
@@ -9,7 +10,9 @@ services:
     environment:
       - SPICEDB_GRPC_PRESHARED_KEY=secret-preshared-key
       - SPICEDB_DATASTORE_ENGINE=memory
+    restart: unless-stopped
 
+  # 2. Redis State & Behavioral Rolling Metrics
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -17,6 +20,27 @@ services:
       - "6379:6379"
     restart: unless-stopped
 
+  # 3. Zero-Trust API Gateway (FastAPI, Isolation Forest, SpiceDB Client, Audit Engine)
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zero-trust-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - SPICEDB_ENDPOINT=spicedb:50051
+      - SPICEDB_PRESHARED_KEY=secret-preshared-key
+      - SPICEDB_INSECURE=true
+      - REDIS_URL=redis://redis:6379/0
+      - GATEWAY_HOST=0.0.0.0
+      - GATEWAY_PORT=8000
+    depends_on:
+      - spicedb
+      - redis
+    restart: unless-stopped
+
+  # 4. Protected Backend Microservices
   docs-service:
     build: ./demo/services/docs-service
     container_name: docs-service
@@ -24,6 +48,7 @@ services:
       - "3001:3001"
     restart: unless-stopped
 
+  # 5. Team Directory Microservice
   team-service:
     build: ./demo/services/team-service
     container_name: team-service
@@ -31,6 +56,7 @@ services:
       - "3002:3002"
     restart: unless-stopped
 
+  # 6. Payroll & Compensation Microservice
   payroll-service:
     build: ./demo/services/payroll-service
     container_name: payroll-service
@@ -38,12 +64,16 @@ services:
       - "3003:3003"
     restart: unless-stopped
 
+  # 7. Zero-Trust Interactive Frontend UI
   demo-frontend:
     build: ./demo/frontend
     container_name: demo-frontend
     ports:
-      - "5173:5173"
+      - "4000:4000"
+    environment:
+      - GATEWAY_URL=http://gateway:8000
     depends_on:
+      - gateway
       - docs-service
       - team-service
       - payroll-service
