@@ -15,7 +15,8 @@ ANOMALY_THRESHOLD = 0.45
 DECAY_ALPHA = 1.0
 DECAY_GAMMA = 1.2
 RECOVERY_STEP = 0.05
-RECOVERY_TIME_RATE = 0.0001  # recovery per second elapsed
+RECOVERY_TIME_RATE = 0.20 / 600.0  # +0.20 recovery every 10 minutes (600 seconds elapsed)
+
 
 
 class TrustScoreManager:
@@ -74,8 +75,8 @@ class TrustScoreManager:
             decay_amount = DECAY_ALPHA * (excess_anomaly**DECAY_GAMMA)
             new_score = max(0.0, prev_score - decay_amount)
         else:
-            # Benign request triggers trust recovery
-            time_recovery = RECOVERY_TIME_RATE * min(time_delta, 3600.0)
+            # Benign request triggers trust recovery (+0.20 per 10 mins elapsed)
+            time_recovery = RECOVERY_TIME_RATE * min(time_delta, 86400.0)
             recovery_amount = RECOVERY_STEP + time_recovery
             new_score = min(1.0, prev_score + recovery_amount)
 

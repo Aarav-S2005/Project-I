@@ -70,6 +70,19 @@ class ZeroTrustInterceptor:
         # 3. Evaluate anomaly model and stateful trust score
         trust_score, _ = self.trust_service.evaluate(context, feature_vector=features)
 
+        # 3b. Self-healing: If previously quarantined but trust has recovered to ALLOW band, lift restriction
+        if not policy_allowed and trust_score.score >= self.decision_engine.thresholds.allow_threshold:
+            try:
+                self.spicedb_client.remove_restriction(context.subject, context.resource)
+                policy_allowed = self.spicedb_client.check_access(
+                    subject=context.subject,
+                    relation=context.permission,
+                    resource=context.resource,
+                )
+            except Exception as exc:
+                logger.debug("Auto-lift quarantine failed: %s", exc)
+
+
         # 4. Determine response action and execute closed-loop feedback if needed
         decision = self.decision_engine.evaluate_decision(
             policy_allowed=policy_allowed,

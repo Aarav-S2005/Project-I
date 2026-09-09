@@ -670,8 +670,8 @@ export function App() {
               <p style={{ color: '#94a3b8', margin: 0 }}>{lastReason}</p>
             </div>
 
-            {/* Quick Recovery / Step-Up MFA Button if degraded */}
-            {lastAction === 'step_up' && (
+            {/* Quick Recovery / Step-Up MFA Button if degraded or quarantined */}
+            {(lastAction === 'step_up' || lastAction === 'narrow' || lastAction === 'deny' || currentTrustScore < 0.75) && (
               <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #334155' }}>
                 <button
                   className="btn btn-warning"
@@ -679,10 +679,17 @@ export function App() {
                   style={{ width: '100%', justifyContent: 'center' }}
                 >
                   <Lock size={15} />
-                  Complete MFA Verification (Restore Trust to 1.00)
+                  {lastAction === 'step_up'
+                    ? 'Complete MFA Verification (Restore Trust to 1.00)'
+                    : lastAction === 'narrow'
+                    ? 'Unlock Quarantine via MFA Verification (Restore Graph Access)'
+                    : lastAction === 'deny'
+                    ? 'Emergency Re-Auth via MFA (Lift Restrictions & Reset Trust)'
+                    : 'Verify MFA (Restore Session Trust to 1.00)'}
                 </button>
               </div>
             )}
+
           </div>
 
           {/* Trust Builder & Benign Activity Card */}
